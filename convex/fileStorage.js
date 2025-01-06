@@ -26,7 +26,7 @@ export const AddFileEntryToDb = mutation({
 
 export const getFilesUrl = mutation({
   args: {
-    storageId: v.string(),
+    storageId: v.string(), 
   },
   handler: async ({ storage }, { storageId }) => {
     const url = await storage.getUrl(storageId); // Ensure `storage` is passed from `ctx`.
