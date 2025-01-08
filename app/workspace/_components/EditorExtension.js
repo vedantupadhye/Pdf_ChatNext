@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bold, Italic, HighlighterIcon, List, AlignJustify, AlignCenter, ListCheck, ListChecksIcon, BookXIcon } from 'lucide-react';
+import React, { useState,useEffect } from 'react';
+import { Bold, Italic, HighlighterIcon, List, AlignJustify, AlignCenter, ListCheck, ListChecksIcon, BookXIcon, SparkleIcon } from 'lucide-react';
 import BulletList from '@tiptap/extension-bullet-list';
 import Highlight from '@tiptap/extension-highlight';
 import ListItem from '@tiptap/extension-list-item';
@@ -9,6 +9,12 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TaskList from '@tiptap/extension-task-list'; // Import TaskList
 import TaskItem from '@tiptap/extension-task-item'; // Import TaskItem
+import { useAction } from 'convex/react';
+import { api } from '@/convex/_generated/api';
+import { useParams } from 'next/navigation';
+import { chatSession } from '@/config/AIModel';
+import { toast } from 'sonner';
+
 
 const EditorExtension = ({ editor }) => {
   if (!editor) return null;
@@ -23,11 +29,52 @@ const EditorExtension = ({ editor }) => {
   const splitListItem = () => editor.chain().focus().splitListItem('taskItem').run(); // Split list item
   const toggleTextAlign = (alignment) => editor.chain().focus().setTextAlign(alignment).run();
 
+    const {fileId} = useParams()
+    const SearchAi= useAction(api.myActions.search)
+    
+    const onAiClick = async(query) =>{
+        toast('AI is thinking ...')
+        const selectedText = editor.state.doc.textBetween(
+            editor.state.selection.from,
+            editor.state.selection.to,
+            ' '
+        )       
+        console.log(selectedText) 
+
+        const result = await SearchAi({
+            query:selectedText,
+            fileId:fileId
+        })
+
+        console.log("result" ,result)
+        const UnformattedAns= JSON.parse(result)
+        let AllUnformattedAns = ' '
+
+        UnformattedAns&&UnformattedAns.forEach(item => {
+            AllUnformattedAns = AllUnformattedAns+item.pageContent
+        });
+
+        const PROMPT = `
+        For the question: "${selectedText}"
+        and the following content as the answer:
+        "${AllUnformattedAns}"
+        Please format the entire response in HTML. Do not add any content by yourself 
+      `;
+
+        const AiModelResult = await chatSession.sendMessage(PROMPT)
+        const FinalAns = AiModelResult.response.text().replace('```','').replace('html','').replace('```','')
+        console.log(FinalAns)
+        const AllText = editor.getHTML();
+        editor.commands.setContent(AllText+'<p><strong>Answer: </strong>'+FinalAns+'</p>')
+
+
+    }
+
   return (
     <div className="p-5">
       <div className="control-group">
-        <div className="button-group flex gap-4">
-          {/* Headings */}
+        <div className="button-group flex justify-between mr-48">
+          
           <button
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             className={editor.isActive('heading', { level: 1 }) ? 'text-blue-500' : ''}
@@ -127,13 +174,18 @@ const EditorExtension = ({ editor }) => {
           >
             <AlignCenter />
           </button>
+          <button
+            onClick={() => onAiClick()}
+            className={'hover:text-blue-500'}
+          >
+            <SparkleIcon />
+          </button>
         </div>
       </div>
     </div>
   );
 };
-
-const TextEditor = () => {
+const TextChanger = () => {
   const [showEditor, setShowEditor] = useState(true);
 
   const editor = useEditor({
@@ -155,18 +207,29 @@ const TextEditor = () => {
   });
 
   return (
-    <div className="editor-wrapper">
-      <EditorExtension editor={editor} />
+   <div>
+      <EditorExtension editor={editor}/>
+      <div className='overflow-scroll h-[88vh]'>
+         <EditorContent editor={editor} />  
+         {/* cant see the old data but can edit new  */}
+      </div>
       
-      {/* Conditional rendering based on `showEditor` state */}
-      {showEditor && (
-        <div className="editor-content-wrapper">
-          <EditorContent editor={editor} />
-        </div>
-      )}
-    </div>
+   </div>
   );
 };
 
-export default TextEditor;
+export default TextChanger;
 
+{/* <div className="w-full h-screen flex flex-col bg-white">
+<div className="border-b">
+  <EditorExtension editor={editor} />
+</div>
+<div className="flex-grow overflow-y-auto">
+  <div className="max-w-screen-lg mx-auto px-4">
+    <EditorContent 
+      editor={editor} 
+      // className="min-h-full py-8"
+    />
+  </div>
+</div>
+</div> */}

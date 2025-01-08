@@ -14,16 +14,16 @@ const Workspace = () => {
     })
     
     useEffect(() =>{
-        console.log(fileInfo)
+        // console.log(fileInfo)
     },[fileInfo])
 
   return (
     <div>
-        <WorkspaceHeader />
+        <WorkspaceHeader fileName ={fileInfo?.fileName}/>
         <div className='grid grid-cols-2 gap-5 overflow-hidden'>
             <div>
                 {/* text editor */}
-                <TextEditor />
+                <TextEditor fileId={fileId}/>
             </div>
             <div>
                 {/* pdf viewer */}

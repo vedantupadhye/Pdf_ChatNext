@@ -72,8 +72,8 @@ const onUpload = async () => {
       createdBy: user?.primaryEmailAddress?.emailAddress || "Unknown User",
     });
 
-    console.log("File Entry Response:", fileEntryResponse);
-    alert("File uploaded successfully.");
+    // console.log("File Entry Response:", fileEntryResponse);
+    // alert("File uploaded successfully.");
 
     // Process the uploaded PDF using the `/api/pdf-loader` endpoint
     const apiResponse = await axios.get(`/api/pdf-loader?pdfUrl=${fileUrl}`);

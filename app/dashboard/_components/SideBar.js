@@ -7,8 +7,8 @@ import UploadPdf from './UploadPdf'
 
 const SideBar = () => {
   return (
-    <div className='shadow-md h-screen p-7'>
-      <Image src={'/logo.svg'} alt='logo' width={120} height={120}/>
+    <div className='shadow-md h-screen p-4'>
+      <Image src={'/logo.svg'} alt='logo' width={100} height={80}/>
     
       <div className='mt-10'>
       

@@ -27,3 +27,26 @@ export const ingest = action({
 
   },
 });
+
+export const search = action({
+  args: {
+    query: v.string(), 
+    fileId:v.string()
+  },
+  handler: async (ctx, args) => {
+    const vectorStore = new ConvexVectorStore(
+      new GoogleGenerativeAIEmbeddings({
+        apiKey: 'AIzaSyC3oowYSR26Cy2XOEwa8tgYGjd9Kr7r6UU',
+        model: "text-embedding-004", // 768 dimensions
+        taskType: TaskType.RETRIEVAL_DOCUMENT,
+        title: "Document title",
+      }),
+       { ctx });
+
+    const resultOne =await(await vectorStore.similaritySearch(args.query, 4))
+    .filter(q=>q.metadata.fileId==args.fileId);
+    console.log(resultOne);
+
+    return JSON.stringify(resultOne)
+  },
+});
