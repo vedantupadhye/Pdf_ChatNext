@@ -20,6 +20,7 @@ import uuid4 from "uuid4";
 import { useUser } from "@clerk/nextjs";
 import axios from "axios";
 import { ingest } from "@/convex/myActions";
+import { toast } from "sonner";
 
 const UploadPdf = ({ children }) => {
   const generateUploadUrl = useMutation(api.fileStorage.generateUploadUrl);
@@ -78,7 +79,7 @@ const onUpload = async () => {
     // Process the uploaded PDF using the `/api/pdf-loader` endpoint
     const apiResponse = await axios.get(`/api/pdf-loader?pdfUrl=${fileUrl}`);
     const splitText = apiResponse.data.result;
-    console.log("Split Text:", splitText);
+    // console.log("Split Text:", splitText);
 
     // Embed the processed document in the vector store
     await embeddDocument({
@@ -94,6 +95,8 @@ const onUpload = async () => {
     setLoading(false);
     setOpen(false)
   }
+
+  toast('file is ready !')
 };
 
   return (
