@@ -27,150 +27,152 @@ const EditorExtension = ({ editor }) => {
   const SearchAi = useAction(api.myActions.search);
   const saveNotes = useMutation(api.notes.AddNotes);
   const { user } = useUser();
-
+ 
   const handleSave = async () => {
     if (!editor) return;
-    
+  
     try {
       setIsSaving(true);
+  
+      const notesContent = editor.getHTML();
+      if (!notesContent || !notesContent.trim()) {
+        toast.error('Editor content is empty. Cannot save.');
+        return;
+      }
+  
       await saveNotes({
-        notes: editor.getHTML(),
-        fileId: fileId,
-        createdBy: user?.primaryEmailAddress?.emailAddress
+        notes: notesContent,
+        fileId,
+        createdBy: user?.primaryEmailAddress?.emailAddress || 'Unknown User',
       });
+  
       toast.success('Changes saved successfully');
     } catch (error) {
-      console.error('Error saving notes:', error);
-      toast.error('Failed to save changes');
+      console.error('Error saving notes:', { error, fileId, notes: editor?.getHTML() });
+      toast.error('Failed to save changes. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
-  const MAX_RETRIES = 3;  // Set a limit on how many times to retry
-
-  const fetchAiResponseWithRetry = async (PROMPT, attempt = 1) => {
-    try {
-      const AiModelResult = await chatSession.sendMessage(PROMPT);
-      return AiModelResult;
-    } catch (error) {
-      if (attempt <= MAX_RETRIES && error.message.includes('503')) {
-        // Retry the request if it's a 503 error
-        toast.info(`AI is overloaded. Retrying... (Attempt ${attempt} of ${MAX_RETRIES})`);
-        await new Promise(resolve => setTimeout(resolve, 3000));  // Wait for 3 seconds
-        return fetchAiResponseWithRetry(PROMPT, attempt + 1);
-      } else {
-        throw new Error('AI request failed after multiple attempts');
-      }
-    }
-  };
   
   const onAiClick = async (query) => {
+    if (!editor) return;
+    
     try {
-      toast('AI is thinking ...');
-  
+      toast('AI is thinking...');
+      
       const selectedText = editor.state.doc.textBetween(
         editor.state.selection.from,
         editor.state.selection.to,
         ' '
       );
   
+      if (!selectedText) {
+        toast.error('Please select some text first');
+        return;
+      }
+  
+      console.log('Selected text:', selectedText); // Debug log
+  
       const result = await SearchAi({
         query: selectedText,
         fileId: fileId
       });
   
-      if (!result || result.error) {
-        toast.error('Failed to fetch relevant content. Please try again.');
+      console.log('Raw AI response:', result); // Debug log
+  
+      let unformattedAnswers;
+      try {
+        // Check if result is already an object/array
+        if (typeof result === 'object' && result !== null) {
+          unformattedAnswers = result;
+        } else {
+          unformattedAnswers = JSON.parse(result);
+        }
+        console.log('Parsed answers:', unformattedAnswers); // Debug log
+      } catch (parseError) {
+        console.error('Error parsing AI response:', parseError);
+        console.log('Raw response that failed parsing:', result);
+        toast.error('Invalid response format from AI');
         return;
       }
   
-      const UnformattedAns = JSON.parse(result);
-      let AllUnformattedAns = '';
-      UnformattedAns?.forEach(item => {
-        AllUnformattedAns += item.pageContent;
-      });
-  
-      const chunkSize = 3000;
-      const chunks = [];
-      for (let i = 0; i < AllUnformattedAns.length; i += chunkSize) {
-        chunks.push(AllUnformattedAns.slice(i, i + chunkSize));
+      // Handle different response formats
+      let combinedContent = '';
+      if (Array.isArray(unformattedAnswers)) {
+        combinedContent = unformattedAnswers
+          .filter(item => item && item.pageContent) // Add null check
+          .map(item => item.pageContent)
+          .join(' ');
+      } else if (typeof unformattedAnswers === 'object' && unformattedAnswers !== null) {
+        // If it's a single object
+        if (unformattedAnswers.pageContent) {
+          combinedContent = unformattedAnswers.pageContent;
+        } else if (unformattedAnswers.text) {
+          combinedContent = unformattedAnswers.text;
+        } else if (unformattedAnswers.content) {
+          combinedContent = unformattedAnswers.content;
+        } else {
+          combinedContent = JSON.stringify(unformattedAnswers);
+        }
+      } else {
+        // If it's a string or other format
+        combinedContent = String(unformattedAnswers);
       }
   
-      let completeAnswer = '';
-      for (const chunk of chunks) {
-        try {
-          const PROMPT = `
-            Based on the provided question and content:
-            Question: "${selectedText}"
-            Content: "${chunk}"
+      console.log('Combined content:', combinedContent); // Debug log
   
-            Your task:
+      if (!combinedContent.trim()) {
+        console.error('Empty content after processing', { 
+          original: result,
+          parsed: unformattedAnswers 
+        });
+        toast.error('No valid content received from AI');
+        return;
+      }
+  
+      const prompt = `
+        For the question: "${selectedText}"
+        and the following content as the answer:
+        "${combinedContent}"
+        Your task:
             - Provide a direct and concise answer to the question.
             - Format the response in valid HTML.
             - do not give any answer by yourself
             - Use <h3> for headings instead of <h1> or any other level.
             - Avoid excessive spacing or unnecessary tags.
             - Keep the response clean and professional.
-            
-          `;
-  
-          // Use the retry function to handle 503 errors
-          const AiModelResult = await fetchAiResponseWithRetry(PROMPT);
-          const partialAnswer = AiModelResult.response.text()
-            .replace(/```html|```/g, '')
-            .trim();
-  
-          if (!partialAnswer) {
-            toast.error('AI failed to generate a response for this chunk.');
-            return;
-          }
-  
-          completeAnswer += partialAnswer + ' ';
-        } catch (error) {
-          toast.error('AI request failed during chunk processing. Please try again later.');
-          console.error('Error during chunk processing:', error);
-          return;
-        }
-      }
-  
-      if (!completeAnswer.trim()) {
-        toast.error('AI could not generate a valid response. Please try again.');
-        return;
-      }
-  
-      const FINAL_PROMPT = `
-        Based on the following consolidated answer, refine and expand it into a single, cohesive, and well-structured response:
-        "${completeAnswer}"
-        - Ensure that the response is complete, well-formatted, and directly answers the question.
-        - Format the response in valid HTML and ensure readability.
       `;
   
-      const finalResponse = await chatSession.sendMessage(FINAL_PROMPT);
-      const refinedAnswer = finalResponse.response.text()
-        .replace(/```html|```/g, '')
+      console.log('Sending prompt to AI:', prompt); // Debug log
+  
+      const aiModelResult = await chatSession.sendMessage(prompt);
+      const formattedAnswer = aiModelResult.response
+        .text()
+        .replace(/```(html)?/g, '')
         .trim();
   
-      if (!refinedAnswer.trim()) {
-        toast.error('AI could not generate a valid refined response. Please try again.');
+      console.log('Formatted answer:', formattedAnswer); // Debug log
+  
+      if (!formattedAnswer) {
+        toast.error('No formatted response received from AI');
         return;
       }
   
-      const AllText = editor.getHTML();
-      editor.commands.setContent(AllText + `<p><strong>Answer:</strong> ${refinedAnswer}</p>`);
+      const currentContent = editor.getHTML();
+      editor.commands.setContent(
+        currentContent + 
+        '<p><strong>Answer: </strong>' + 
+        formattedAnswer + 
+        '</p>'
+      );
   
-      await saveNotes({
-        notes: editor.getHTML(),
-        fileId: fileId,
-        createdBy: user?.primaryEmailAddress?.emailAddress
-      });
-  
-      toast.success('AI response added to your document successfully!');
+      toast.success('AI response added successfully');
     } catch (error) {
-      toast.error('An unexpected error occurred. Please try again.');
-      console.error('AI Error:', error);
+      console.error('Error processing AI request:', error);
+      toast.error('Failed to process AI request. Please try again.');
     }
   };
-  
   
   return editor&&(
     <div className="p-5">
@@ -311,6 +313,12 @@ const EditorExtension = ({ editor }) => {
 
 
 export default EditorExtension;
+
+
+
+
+
+// code of video, better ai feature  
 
 
 

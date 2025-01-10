@@ -14,7 +14,7 @@ const Workspace = () => {
     })
     
     useEffect(() =>{
-        // console.log(fileInfo)
+        console.log(fileInfo)
     },[fileInfo])
 
   return (
