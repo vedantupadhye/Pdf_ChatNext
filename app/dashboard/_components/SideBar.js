@@ -1,16 +1,19 @@
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Layout, Shield } from 'lucide-react';
+import { Layout, Shield, Video } from 'lucide-react';
 import Image from 'next/image';
 import React from 'react';
 import UploadPdf from './UploadPdf';
+import Link from 'next/link';
 
 const SideBar = () => {
   return (
     <div className="shadow-md h-screen p-4 flex flex-col">
       {/* Logo */}
       <div className="flex justify-center sm:justify-start mb-20">
-        <Image src={'/logo.svg'} alt="logo" width={100} height={80} />
+        <Link href={'/'}>
+          <Image src={'/logo.svg'} alt="logo" width={60} height={50} />
+        </Link>
       </div>
     
       {/* Main content */}
@@ -26,8 +29,10 @@ const SideBar = () => {
             <h2>Workspace</h2>
           </div>
           <div className="flex items-center gap-2 p-3 mt-1 hover:bg-slate-100 rounded-lg cursor-pointer">
-            <Shield />
-            <h2>Upgrade</h2>
+            <Video />
+            <Link href={'/learn-more'}>
+            <h2>See Demo </h2>
+            </Link>          
           </div>
         </div>
       </div>

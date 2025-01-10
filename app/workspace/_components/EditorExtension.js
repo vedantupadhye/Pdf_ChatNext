@@ -46,48 +46,136 @@ const EditorExtension = ({ editor }) => {
       setIsSaving(false);
     }
   };
-  const onAiClick = async(query) => {
-    toast('AI is thinking ...');
-    const selectedText = editor.state.doc.textBetween(
-      editor.state.selection.from,
-      editor.state.selection.to,
-      ' '
-    );
+  const MAX_RETRIES = 3;  // Set a limit on how many times to retry
 
-    const result = await SearchAi({
-      query: selectedText,
-      fileId: fileId
-    });
-
-    const UnformattedAns = JSON.parse(result);
-    let AllUnformattedAns = ' ';
-
-    UnformattedAns?.forEach(item => {
-      AllUnformattedAns = AllUnformattedAns + item.pageContent;
-    });
-
-    const PROMPT = `
-      For the question: "${selectedText}"
-      and the following content as the answer:
-      "${AllUnformattedAns}"
-      Please format the entire response in HTML. Do not add any content by yourself 
-    `;
-
-    const AiModelResult = await chatSession.sendMessage(PROMPT);
-    const FinalAns = AiModelResult.response.text().replace('```', '').replace('html', '').replace('```', '');
-    const AllText = editor.getHTML();
-    editor.commands.setContent(AllText + '<p><strong>Answer: </strong>' + FinalAns + '</p>');
-
-    saveNotes({
-      notes: editor.getHTML(),
-      fileId: fileId,
-      createdBy: user?.primaryEmailAddress?.emailAddress
-    });
+  const fetchAiResponseWithRetry = async (PROMPT, attempt = 1) => {
+    try {
+      const AiModelResult = await chatSession.sendMessage(PROMPT);
+      return AiModelResult;
+    } catch (error) {
+      if (attempt <= MAX_RETRIES && error.message.includes('503')) {
+        // Retry the request if it's a 503 error
+        toast.info(`AI is overloaded. Retrying... (Attempt ${attempt} of ${MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, 3000));  // Wait for 3 seconds
+        return fetchAiResponseWithRetry(PROMPT, attempt + 1);
+      } else {
+        throw new Error('AI request failed after multiple attempts');
+      }
+    }
   };
+  
+  const onAiClick = async (query) => {
+    try {
+      toast('AI is thinking ...');
+  
+      const selectedText = editor.state.doc.textBetween(
+        editor.state.selection.from,
+        editor.state.selection.to,
+        ' '
+      );
+  
+      const result = await SearchAi({
+        query: selectedText,
+        fileId: fileId
+      });
+  
+      if (!result || result.error) {
+        toast.error('Failed to fetch relevant content. Please try again.');
+        return;
+      }
+  
+      const UnformattedAns = JSON.parse(result);
+      let AllUnformattedAns = '';
+      UnformattedAns?.forEach(item => {
+        AllUnformattedAns += item.pageContent;
+      });
+  
+      const chunkSize = 3000;
+      const chunks = [];
+      for (let i = 0; i < AllUnformattedAns.length; i += chunkSize) {
+        chunks.push(AllUnformattedAns.slice(i, i + chunkSize));
+      }
+  
+      let completeAnswer = '';
+      for (const chunk of chunks) {
+        try {
+          const PROMPT = `
+            Based on the provided question and content:
+            Question: "${selectedText}"
+            Content: "${chunk}"
+  
+            Your task:
+            - Provide a direct and concise answer to the question.
+            - Format the response in valid HTML.
+            - do not give any answer by yourself
+            - Use <h3> for headings instead of <h1> or any other level.
+            - Avoid excessive spacing or unnecessary tags.
+            - Keep the response clean and professional.
+            
+          `;
+  
+          // Use the retry function to handle 503 errors
+          const AiModelResult = await fetchAiResponseWithRetry(PROMPT);
+          const partialAnswer = AiModelResult.response.text()
+            .replace(/```html|```/g, '')
+            .trim();
+  
+          if (!partialAnswer) {
+            toast.error('AI failed to generate a response for this chunk.');
+            return;
+          }
+  
+          completeAnswer += partialAnswer + ' ';
+        } catch (error) {
+          toast.error('AI request failed during chunk processing. Please try again later.');
+          console.error('Error during chunk processing:', error);
+          return;
+        }
+      }
+  
+      if (!completeAnswer.trim()) {
+        toast.error('AI could not generate a valid response. Please try again.');
+        return;
+      }
+  
+      const FINAL_PROMPT = `
+        Based on the following consolidated answer, refine and expand it into a single, cohesive, and well-structured response:
+        "${completeAnswer}"
+        - Ensure that the response is complete, well-formatted, and directly answers the question.
+        - Format the response in valid HTML and ensure readability.
+      `;
+  
+      const finalResponse = await chatSession.sendMessage(FINAL_PROMPT);
+      const refinedAnswer = finalResponse.response.text()
+        .replace(/```html|```/g, '')
+        .trim();
+  
+      if (!refinedAnswer.trim()) {
+        toast.error('AI could not generate a valid refined response. Please try again.');
+        return;
+      }
+  
+      const AllText = editor.getHTML();
+      editor.commands.setContent(AllText + `<p><strong>Answer:</strong> ${refinedAnswer}</p>`);
+  
+      await saveNotes({
+        notes: editor.getHTML(),
+        fileId: fileId,
+        createdBy: user?.primaryEmailAddress?.emailAddress
+      });
+  
+      toast.success('AI response added to your document successfully!');
+    } catch (error) {
+      toast.error('An unexpected error occurred. Please try again.');
+      console.error('AI Error:', error);
+    }
+  };
+  
+  
   return editor&&(
     <div className="p-5">
       <div className="control-group">
-        <div className="button-group flex justify-between mr-48">
+        <div className="button-group flex justify-between mr-5">
           
           <button
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
@@ -188,18 +276,29 @@ const EditorExtension = ({ editor }) => {
           >
             <AlignCenter />
           </button>
-          <button
-            onClick={() => onAiClick()}
-            className={'hover:text-blue-500'}
-          >
-            <SparkleIcon />
-          </button>
+          <div className="flex items-center space-x-2 relative group">
+            <span className=" text-purple-500 font-semibold">Try AI Feature</span>
+            
+            <button
+              onClick={() => onAiClick()}
+              className="relative hover:text-blue-500 transition-all duration-300"
+            >
+              <SparkleIcon className="w-6 h-6" />
+              
+              {/* Tooltip on hover */}
+              <span className=" absolute bottom-[-40px] left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-sm px-3 py-1 rounded-lg bg-gray-700 text-white shadow-md whitespace-nowrap">
+                Select the text and click on the button
+              </span>
+            </button>
+          </div>
+
+
           <Button 
             onClick={handleSave}
             disabled={isSaving}
             variant="outline"
             size="sm"
-            className="flex items-center bg-black text-white gap-2 "
+            className="flex items-center bg-black text-white gap-2 ml-4"
           >
             <Save className="w-4 h-4 " />
             {isSaving ? 'Saving...' : 'Save'}

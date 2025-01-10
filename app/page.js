@@ -100,6 +100,12 @@ return (
               Get Started 
               </Link>
             </Button>
+            <Button className= "bg-white mx-4 hover:bg-amber-100 text-black rounded-full px-8 py-6 text-lg font-semibold">
+
+                <Link href={'/learn-more'}>
+                  Know How to use
+                </Link>
+                </Button>
           </motion.div>
         </motion.div>
         <motion.div
@@ -141,7 +147,7 @@ return (
         </div>
       </section>
       <section className="w-full py-12 md:py-24 lg:py-32 bg-gray-800 ">
-          <div className="container px-4 md:px-6">
+          <div className="container px-4 md:px-10">
             <div className="grid gap-10 lg:grid-cols-2 items-center">
               <div className="space-y-4 mx-8">
                 <motion.h2 
@@ -192,18 +198,19 @@ return (
                 </motion.div>
               </div>
               <motion.div
-                className="relative"
+                className="relative mx-32"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5 }}
               >
-                <Image
-                  src={'/ai_notes.jpg'}
-                  width={600}
-                  height={400}
-                  alt="AI NoteTaker in action"
-                  className="rounded-lg shadow-xl"
-                />
+                 <video
+                        src={'/homeVideo.mp4'}  // Use the video source
+                        autoPlay
+                        loop
+                        muted
+                        className="relative rounded-lg shadow-xl object-fill"
+                        style={{ width: "450px", height: "500px" }}  // Ensures proper video sizing
+                      />
               </motion.div>
             </div>
           </div>

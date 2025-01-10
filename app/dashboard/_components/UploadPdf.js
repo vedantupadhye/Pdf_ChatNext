@@ -27,82 +27,79 @@ const UploadPdf = ({ children }) => {
   const addFileEntry = useMutation(api.fileStorage.AddFileEntryToDb);
   const getFilesUrl = useMutation(api.fileStorage.getFilesUrl);
   const [file, setFile] = useState();
-  const embeddDocument=useAction(api.myActions.ingest)
+  const embeddDocument = useAction(api.myActions.ingest);
   const [loading, setLoading] = useState(false);
   const { user } = useUser();
   const [fileName, setFileName] = useState("");
-  const [open,setOpen]=useState(false)
+  const [open, setOpen] = useState(false); // State for dialog visibility
 
   const onFileSelect = (event) => {
     setFile(event.target.files[0]);
   };
 
- 
-const onUpload = async () => {
-  try {
-    if (!file) {
-      alert("Please select a file to upload.");
-      return;
+  const onUpload = async () => {
+    try {
+      if (!file) {
+        alert("Please select a file to upload.");
+        return;
+      }
+      setLoading(true);
+
+      // Generate upload URL
+      const postUrl = await generateUploadUrl();
+
+      // Upload the file
+      const uploadResponse = await fetch(postUrl, {
+        method: "POST",
+        headers: { "Content-Type": file?.type || "application/pdf" },
+        body: file,
+      });
+
+      const { storageId } = await uploadResponse.json();
+      console.log("Storage ID:", storageId);
+
+      // Generate fileId and file URL
+      const fileId = uuid4();
+      const fileUrl = await getFilesUrl({ storageId });
+      console.log("File URL:", fileUrl);
+
+      // Add file entry to the database
+      const fileEntryResponse = await addFileEntry({
+        fileId,
+        storageId,
+        fileName: fileName || "Untitled File",
+        fileUrl,
+        createdBy: user?.primaryEmailAddress?.emailAddress || "Unknown User",
+      });
+
+      // Process the uploaded PDF using the `/api/pdf-loader` endpoint
+      const apiResponse = await axios.get(`/api/pdf-loader?pdfUrl=${fileUrl}`);
+      const splitText = apiResponse.data.result;
+
+      // Embed the processed document in the vector store
+      await embeddDocument({
+        splitText,
+        fileId,
+      });
+
+      console.log("Embedding completed successfully.");
+    } catch (error) {
+      console.error("Error during upload or embedding:", error);
+      alert("Failed to upload or process the file. Please try again.");
+    } finally {
+      setLoading(false);
+      setOpen(false); // Close the dialog after upload is complete
     }
-    setLoading(true);
 
-    // Generate upload URL
-    const postUrl = await generateUploadUrl();
-
-    // Upload the file
-    const uploadResponse = await fetch(postUrl, {
-      method: "POST",
-      headers: { "Content-Type": file?.type || "application/pdf" },
-      body: file,
-    });
-
-    const { storageId } = await uploadResponse.json();
-    console.log("Storage ID:", storageId);
-
-    // Generate fileId and file URL
-    const fileId = uuid4();
-    const fileUrl = await getFilesUrl({ storageId });
-    console.log("File URL:", fileUrl);
-
-    // Add file entry to the database
-    const fileEntryResponse = await addFileEntry({
-      fileId,
-      storageId,
-      fileName: fileName || "Untitled File",
-      fileUrl,
-      createdBy: user?.primaryEmailAddress?.emailAddress || "Unknown User",
-    });
-
-    // console.log("File Entry Response:", fileEntryResponse);
-    // alert("File uploaded successfully.");
-
-    // Process the uploaded PDF using the `/api/pdf-loader` endpoint
-    const apiResponse = await axios.get(`/api/pdf-loader?pdfUrl=${fileUrl}`);
-    const splitText = apiResponse.data.result;
-    // console.log("Split Text:", splitText);
-
-    // Embed the processed document in the vector store
-    await embeddDocument({
-      splitText,
-      fileId,
-    });
-
-    console.log("Embedding completed successfully.");
-  } catch (error) {
-    console.error("Error during upload or embedding:", error);
-    alert("Failed to upload or process the file. Please try again.");
-  } finally {
-    setLoading(false);
-    setOpen(false)
-  }
-
-  toast('file is ready !')
-};
+    toast('File is ready!');
+  };
 
   return (
-    <Dialog open={open}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button onClick={()=>setOpen(true)} className='w-full'>+ Upload PDF File</Button>
+        <Button onClick={() => setOpen(true)} className="w-full">
+          + Upload PDF File
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
