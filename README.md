@@ -41,15 +41,11 @@ A modern web app that allows users to **upload PDFs**, **generate AI summaries**
 | Frontend         | Next.js (TypeScript), TailwindCSS, Shadcn UI |
 | Auth             | Clerk                             |
 | State Management | React Query                       |
+
 | AI Integration   | Gemini API                        |
 | Deployment       | Vercel                            |
 
 ---
 
-## 📦 Installation & Setup
 
-### 1. Clone the repo
 
-```bash
-git clone https://github.com/your-username/pdf-notes-app.git
-cd pdf-notes-app
