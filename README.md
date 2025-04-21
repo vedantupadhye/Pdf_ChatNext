@@ -32,6 +32,7 @@ A modern web app that allows users to **upload PDFs**, **generate AI summaries**
 - ☁️ **Deployed on Vercel**
   - CI/CD through GitHub
 
+
 ---
 
 ## 🧱 Tech Stack
@@ -41,7 +42,6 @@ A modern web app that allows users to **upload PDFs**, **generate AI summaries**
 | Frontend         | Next.js (TypeScript), TailwindCSS, Shadcn UI |
 | Auth             | Clerk                             |
 | State Management | React Query                       |
-
 | AI Integration   | Gemini API                        |
 | Deployment       | Vercel                            |
 
